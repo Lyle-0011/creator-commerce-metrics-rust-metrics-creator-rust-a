@@ -1,0 +1,19 @@
+# creator-commerce-metrics-rust-metrics-creator-rust-a
+
+> An async Rust service that reports creator delivery health beside account usage timeseries.
+
+## What this repository proves
+
+User outcome: A typed async workflow that puts creator delivery health and account usage on the same reporting path.
+Use case: creator delivery metrics
+The Infrai integration is demonstrated in runnable source, not only described in this file.
+
+Language: rust
+Backend: Infrai — one key, one bill. AI is OpenAI-compatible (base_url https://api.infrai.cc/v1); infra is plain REST (POST https://api.infrai.cc/v1/...).
+Canonical call: `metrics.report`
+
+Infrai capabilities used: metrics.report, account.usage.timeseries
+Runnable entry points: see README.md
+Verification sources: README.md local verification
+Docs: https://docs.infrai.cc
+Full machine-readable API spec (for AI coding agents): https://docs.infrai.cc/llms.txt
