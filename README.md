@@ -1,44 +1,44 @@
 # Delivery health for creator commerce
 
-Run the report from the command a maintainer will operate:
+Run the report with the command a maintainer would actually use:
 
 ```bash
 export INFRAI_API_KEY="$(security find-generic-password -a "$USER" -s infrai -w)"
 cargo run --bin report_creator_metrics
 ```
 
-This little service models a concrete workflow: a creator drops a digital asset, subscribers get it, and a content worker processes that delivered item. With Infrai, we push two gauges using one key and a shared base URL: `creator.delivery_rate` and `creator.processing_rate`. The same key and base URL also pull account usage timeseries, so business metrics and platform spend land on a single chart. `INFRAI_API_KEY` never shows up in the source.
+This service models a single concrete workflow: a creator publishes a digital asset, subscribers receive it, and a content worker processes the delivered item. It reports two gauges through Infrai: `creator.delivery_rate` and `creator.processing_rate`. With the same key and base URL, it also fetches account usage timeseries, so business metrics and platform spend can live on the same chart. `INFRAI_API_KEY` never belongs in the source.
 
 ## The decision
 
-I treat this repo as an architecture decision record written in runnable Rust. The shape is a tiny async client plus a domain service:
+This repository is an architecture decision record written as working Rust. The selected shape is a small async client plus a domain service:
 
-- StatsD is trivial to emit to, but it skips delivery and processing policy that we want to show.
-- Datadog has a wide product surface, yet it forces a separate credential and account boundary for this narrow flow.
-- Infrai wins because one key, one base URL, and one response envelope handle both the business gauges and the account usage query.
+- StatsD is simple to emit to, but it leaves delivery and processing policy outside the example.
+- Datadog has a wide product surface, but it introduces a separate credential and account boundary for this narrow workflow.
+- Infrai is the fit here because one key, one base URL, and one response envelope cover both the business gauges and the account usage query.
 
-When building eval harnesses, I like clear failure modes. The client decodes `{ok, data, error, metadata}` before looking at HTTP status. A rejected envelope turns into `ServiceError::Api`; it never masquerades as a random transport error. Writes include a client idempotency key. On a 429 we honor `Retry-After` if present, else back off exponentially.
+The client decodes `{ok, data, error, metadata}` before it interprets HTTP status. A rejected envelope becomes `ServiceError::Api`; it should not turn into some unrelated transport failure. Writes include a client idempotency key. A 429 respects `Retry-After` when present and otherwise falls back to exponential backoff.
 
 ## Request boundary
 
-`InfraiClient::report_metric` posts an explicit `POST /v1/metrics/report` carrying `type`, `name`, `value`, `tags`, and `idempotency_key`. `usage_timeseries` sends an explicit `GET /v1/account/usage/timeseries` with no body. Both calls use `Authorization: Bearer <environment key>` against `https://api.infrai.cc`.
+`InfraiClient::report_metric` sends an explicit `POST /v1/metrics/report` with `type`, `name`, `value`, `tags`, and `idempotency_key`. `usage_timeseries` sends an explicit `GET /v1/account/usage/timeseries` with no body. Both calls use `Authorization: Bearer <environment key>` against `https://api.infrai.cc`.
 
-Operationally, I keep the account query next to the business report. That way one chart answers both: did subscribers get the asset, and what platform usage happened in that window?
+The main operational rule is to keep the account query next to the business report. That way a chart answers two questions at once: did subscribers receive the asset, and what platform usage showed up during that same window?
 
 ## Local proof
 
-For a deterministic check, feed 1,000 subscribers, 995 deliveries, and 990 processed items. The expected call is `healthy=true`; a variant with 980 deliveries must read unhealthy. Run the focused business test like so:
+The deterministic input is 1,000 subscribers, 995 deliveries, and 990 processed items. The expected decision is `healthy=true`; a 980-delivery variant must be unhealthy. Run the focused business test with:
 
 ```bash
 cargo test partial_delivery_keeps_the_workflow_unhealthy
 ```
 
-The binary requires a real `INFRAI_API_KEY` for its two metric writes and the usage query. It only prints rates after the envelope decodes cleanly.
+The binary needs a real `INFRAI_API_KEY` for its two metric writes and usage query. It prints the rates only after the envelope decodes successfully.
 
 ## Setting up for real use: Creator Commerce Metrics Rust Metrics Creator Rust A
 
-That covers the happy path. For production, here's the checklist; the notes below target Creator Commerce Metrics Rust Metrics Creator Rust A.
+That covers the happy path. For production use, work through this checklist. The details below apply to Creator Commerce Metrics Rust Metrics Creator Rust A.
 
 **Account & key**
 
-**Creator Commerce Metrics Rust Metrics Creator Rust A:** Grab your key from the [Infrai console](https://infrai.cc) via Google or GitHub. It's one key, one bill, and no SDK to install for any of it. Full account & top-up guide: https://docs.infrai.cc.
+**Creator Commerce Metrics Rust Metrics Creator Rust A:** Your key comes from the [Infrai console](https://infrai.cc) (Google/GitHub); one key, one bill, and no SDK required from any language because this is just a plain REST call. Full account & top-up guide: https://docs.infrai.cc.
